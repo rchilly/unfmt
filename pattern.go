@@ -29,15 +29,15 @@ func newPattern(format string) (p pattern, err error) {
 		return
 	}
 
+	p.format = format
+
 	// After parsing verbs, must unescape '%%'s before parsing segments
 	// in order to match literal '%'s in the string input.
-	err = p.parseSegments(unescapeFormat(format))
-
-	p.format = format
+	err = p.parseSegments(unescapePercents(format))
 	return
 }
 
-func unescapeFormat(format string) string {
+func unescapePercents(format string) string {
 	return strings.ReplaceAll(format, fmt.Sprintf("%c%c", pct, pct), fmt.Sprintf("%c", pct))
 }
 
@@ -134,6 +134,8 @@ func (p *pattern) capture(str string) error {
 	}
 
 	for i, start := range starts {
+		// Capture from the start of the string up until first
+		// segment if the pattern starts with a verb.
 		if i == 0 && start > 0 && p.startsWithVerb() {
 			p.captures = append(p.captures, str[:start])
 		}
@@ -176,10 +178,10 @@ func (p *pattern) findAllSegmentStarts(str string) error {
 				break
 			}
 
-			trueStart := relativeStart + offset
+			trueStart := offset + relativeStart
 			starts = append(starts, trueStart)
 
-			offset += (relativeStart + len(segment))
+			offset = trueStart + len(segment)
 		}
 
 		if len(starts) == 0 {
@@ -195,7 +197,7 @@ func (p *pattern) findAllSegmentStarts(str string) error {
 /*
 	Evaluates the list of found start indexes for each segment in the pattern
 	in search of a single set, one per segment. That set locates the sequence
-	of segments in the string input which perfectly match the segments in the
+	of segments in the string input which perfectly matches the segments in the
 	pattern on either side of the verbs – the "true" segments, out of what may
 	be multiple found instances of each in the string input.
 
