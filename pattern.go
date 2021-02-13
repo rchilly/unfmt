@@ -7,20 +7,43 @@ import (
 	"unicode/utf8"
 )
 
+var flags = []rune{
+	'#',
+	'-',
+	'.',
+	' ',
+	'0',
+	'1',
+	'2',
+	'3',
+	'4',
+	'5',
+	'6',
+	'7',
+	'8',
+	'9',
+}
+
+func isFlag(r rune) bool {
+	for _, f := range flags {
+		if f == r {
+			return true
+		}
+	}
+
+	return false
+}
+
 type pattern struct {
 	format   string
-	verbs    []substring
-	segments []substring
+	verbs    []verb
+	segments []segment
 	captures []string
 }
 
-type substring struct {
+type segment struct {
 	value  string
 	starts []int
-}
-
-func (s substring) String() string {
-	return s.value
 }
 
 func newPattern(format string) (p pattern, err error) {
@@ -46,24 +69,34 @@ func (p *pattern) parseVerbs(format string) error {
 
 	var seekVerb bool
 	var idx int
+	var flags []rune
 
 	for len(fmtBytes) > 0 {
 		nextRune, size := utf8.DecodeRune(fmtBytes)
 
 		if seekVerb {
-			if nextRune != pct {
-				if !isSupportedVerb(nextRune) {
-					return fmt.Errorf("%w: unsupported verb '%c%c'", ErrBadArg, pct, nextRune)
-				}
+			switch {
+			case nextRune == pct:
+				seekVerb = false
+			case isFlag(nextRune):
+				flags = append(flags, nextRune)
+			case isSupportedVerb(nextRune):
+				// Account for leading '%' along with any flags.
+				offset := len(flags) + 1
+				p.verbs = append(p.verbs, verb{
+					start: idx - offset,
+					value: nextRune,
+					flags: flags,
+				})
+				flags = nil
 
-				// Subtract from index to account for the preceding '%'.
-				p.verbs = append(p.verbs, substring{
-					starts: []int{idx - 1},
-					value:  fmt.Sprintf("%c%c", pct, nextRune),
+				seekVerb = false
+			default:
+				return fmt.Errorf("%w: unsupported verb '%s'", ErrBadArg, verb{
+					value: nextRune,
+					flags: flags,
 				})
 			}
-
-			seekVerb = false
 		} else if nextRune == pct {
 			seekVerb = true
 		}
@@ -94,19 +127,19 @@ func (p *pattern) parseVerbs(format string) error {
 */
 func (p *pattern) parseSegments(unescapedFormat string) error {
 	maxSegments := len(p.verbs) + 1
-	p.segments = make([]substring, 0, maxSegments)
+	p.segments = make([]segment, 0, maxSegments)
 
 	remainder := unescapedFormat
 
 	for i, verb := range p.verbs {
-		halves := strings.SplitN(remainder, verb.value, 2)
+		halves := strings.SplitN(remainder, verb.String(), 2)
 		if len(halves[0]) > 0 {
-			p.segments = append(p.segments, substring{
+			p.segments = append(p.segments, segment{
 				value: halves[0],
 			})
 		} else if i > 0 {
 			if verb.value == p.verbs[i-1].value {
-				return fmt.Errorf("%w: found consecutive instances of verb '%s' without an intervening substring", ErrBadArg, verb.value)
+				return fmt.Errorf("%w: found consecutive instances of verb '%c%c' without an intervening substring", ErrBadArg, pct, verb.value)
 			}
 		}
 
@@ -114,7 +147,7 @@ func (p *pattern) parseSegments(unescapedFormat string) error {
 	}
 
 	if len(remainder) > 0 {
-		p.segments = append(p.segments, substring{
+		p.segments = append(p.segments, segment{
 			value: remainder,
 		})
 	}
@@ -122,15 +155,39 @@ func (p *pattern) parseSegments(unescapedFormat string) error {
 	return nil
 }
 
+// TODO: Update me to take any other capture-limiting flags into account besides max width.
+// Encapsulate the max width bit better.
 func (p *pattern) capture(str string) error {
 	err := p.findAllSegmentStarts(str)
 	if err != nil {
 		return err
 	}
 
+	// TODO: Refactor to get _capture_ starts. That will take width and adjacent verbs into account.
+	// Then can just do one catch all loop below.
+	// Could even return a _map_ of segment starts to number of expected captures.
+	// That will actually work better. If the format is just a verb(s), then the map
+	// will have one key (0) and value len(p.verbs).
+	// If the format has a given segment preceding a series of adjacent verbs, same deal.
+	// And max width will be taken into account on that level, plus reducing the shared substring
+	// after each capture.
+	// But in that case, how to know how much of the shared capture to take per verb?
 	starts, err := p.getTrueSegmentStarts()
 	if err != nil {
 		return err
+	}
+
+	// TODO: With refactoring done, this case shouldn't exist.
+	if len(starts) == 0 {
+		capture := strings.TrimSpace(str)
+		if maxWidth, ok := p.verbs[len(p.captures)].maxWidth(); ok {
+			if len(capture) > maxWidth {
+				capture = capture[:maxWidth]
+			}
+		}
+
+		p.captures = append(p.captures, capture)
+		return nil
 	}
 
 	for i, start := range starts {
@@ -154,6 +211,14 @@ func (p *pattern) capture(str string) error {
 		}
 
 		capture := str[captureFrom:captureTo]
+		capture = strings.TrimSpace(capture)
+
+		if maxWidth, ok := p.verbs[len(p.captures)].maxWidth(); ok {
+			if len(capture) > maxWidth {
+				capture = capture[:maxWidth]
+			}
+		}
+
 		if len(capture) > 0 {
 			p.captures = append(p.captures, capture)
 		}
@@ -210,6 +275,12 @@ func (p *pattern) findAllSegmentStarts(str string) error {
 */
 func (p pattern) getTrueSegmentStarts() ([]int, error) {
 	segCount := len(p.segments)
+
+	// TODO: This case may change depending on how this method is refactored.
+	if segCount == 0 {
+		return nil, nil
+	}
+
 	var startSets [][]int
 
 	lastSegStarts := p.segments[segCount-1].starts
@@ -265,7 +336,7 @@ func (p pattern) assign(targetPtrs []interface{}) error {
 		}
 
 		verb := p.verbs[i].value
-		assignFunc := assignFuncs[rune(verb[1])]
+		assignFunc := assignFuncs[verb]
 
 		err := assignFunc(p.captures[i], targetPtrs[i])
 		if err != nil {
@@ -279,7 +350,7 @@ func (p pattern) assign(targetPtrs []interface{}) error {
 func (p pattern) startsWithVerb() bool {
 	if len(p.verbs) > 0 {
 		firstVerb := p.verbs[0]
-		return firstVerb.starts[0] == 0
+		return firstVerb.start == 0
 	}
 
 	return false
@@ -288,7 +359,8 @@ func (p pattern) startsWithVerb() bool {
 func (p pattern) endsWithVerb() bool {
 	if len(p.verbs) > 0 {
 		lastVerb := p.verbs[len(p.verbs)-1]
-		return lastVerb.starts[0] == len(p.format)-2
+		offset := len(lastVerb.String())
+		return lastVerb.start == len(p.format)-offset
 	}
 
 	return false
