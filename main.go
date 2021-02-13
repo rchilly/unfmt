@@ -7,12 +7,11 @@ import (
 
 const (
 	pct rune = '%'
-	neg rune = '-'
 
-	verbBool   = 't'
-	verbString = 's'
-	verbInt    = 'd'
-	// TODO: Add missing verbs. %f, %t, %b, etc.
+	verbBool   rune = 't'
+	verbInt    rune = 'd'
+	verbString rune = 's'
+	// TODO: Add missing verbs.
 )
 
 var (

@@ -38,9 +38,33 @@ func TestGimmef(t *testing.T) {
 			},
 		},
 		{
+			name:   "handles width and whitespace",
+			format: "%5s",
+			str:    "   abcdefghijk",
+			targetPtrs: []interface{}{
+				&stringVal1,
+			},
+			assertResult: func(t *testing.T) {
+				assert.Equal(t, "abcde", stringVal1)
+			},
+		},
+		// {
+		// 	name:   "handles adjacent verbs",
+		// 	format: "%5s%d",
+		// 	str:    "   123456",
+		// 	targetPtrs: []interface{}{
+		// 		&stringVal1,
+		// 		&intVal1,
+		// 	},
+		// 	assertResult: func(t *testing.T) {
+		// 		assert.Equal(t, "12345", stringVal1)
+		// 		assert.Equal(t, 6, intVal1)
+		// 	},
+		// },
+		{
 			name:   "handles substrings",
 			format: "might contain %s fragment",
-			str:    "I have a sentence that might contain this fragment of text",
+			str:    "I have a sentence that might contain      this fragment of text",
 			targetPtrs: []interface{}{
 				&stringVal1,
 			},
@@ -239,4 +263,31 @@ func BenchmarkGimmef(b *testing.B) {
 
 	assert.Equal(b, "favorite number", favoriteNumber)
 	assert.Equal(b, 3, three)
+}
+
+func TestFormatting(t *testing.T) {
+	t.SkipNow()
+
+	if false {
+		t.FailNow()
+	}
+	fmt.Printf("%0120.2f\n", 10.123)
+}
+
+func TestVerbs(t *testing.T) {
+	t.SkipNow()
+
+	if false {
+		t.FailNow()
+	}
+
+	format := "%5s %9.2d %-8s"
+
+	p, err := newPattern(format)
+	if err != nil {
+		t.Error(err)
+	}
+
+	fmt.Printf("p.segments = %#v\n", p.segments)
+	fmt.Printf("p.verbs = %#v\n", p.verbs)
 }
