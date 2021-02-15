@@ -6,8 +6,6 @@ import (
 )
 
 const (
-	pct rune = '%'
-
 	verbBool   rune = 't'
 	verbInt    rune = 'd'
 	verbString rune = 's'
@@ -24,14 +22,17 @@ var (
 	// ErrMultipleMatches reports that 'str' matches 'format' more than once.
 	ErrMultipleMatches = errors.New("'str' matches 'format' more than once")
 
+	// ErrEmptyCapture reports a capture of empty string for one of the verbs in 'format'.
+	ErrEmptyCapture = errors.New("captured empty string")
+
 	// ErrBug reports a bug.
 	ErrBug = errors.New("bug")
 )
 
 // TODO: Initialize exported pattern type safe for (concurrent) reuse. Must compile equivalent.
 
-// Gimmef uses 'format' to capture typed values from 'str' and assign them to 'targetPtrs'.
-func Gimmef(format, str string, targetPtrs ...interface{}) error {
+// FromString captures values from 'str' according to 'format' and assigns them to 'targetPtrs'.
+func FromString(str, format string, targetPtrs ...interface{}) error {
 	if format == "" {
 		return fmt.Errorf("%w: 'format' must not be empty", ErrBadArg)
 	}
@@ -55,7 +56,7 @@ func Gimmef(format, str string, targetPtrs ...interface{}) error {
 
 	err = pattern.capture(str)
 	if err != nil {
-		return fmt.Errorf("applying 'format' to 'str': %w", err)
+		return fmt.Errorf("capturing from 'str' according to 'format': %w", err)
 	}
 
 	err = pattern.assign(targetPtrs)

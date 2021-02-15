@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"strconv"
-	"strings"
 )
 
 type verb struct {
@@ -13,26 +12,22 @@ type verb struct {
 }
 
 func (v verb) String() string {
-	var flags []string
+	var flags string
 	for i := range v.flags {
-		flags = append(flags, string(v.flags[i]))
+		flags += string(v.flags[i])
 	}
-	return fmt.Sprintf("%c%s%c", pct, strings.Join(flags, ""), v.value)
+	return fmt.Sprintf("%%%s%c", flags, v.value)
 }
 
 func (v verb) maxWidth() (int, bool) {
-	if v.value != verbString {
-		return 0, false
-	}
-
-	var widthFlags []string
+	var widthFlags string
 	var taking bool
 
 	for i := range v.flags {
 		f := v.flags[i]
-		if f >= 48 && f <= 57 {
+		if f >= '0' && f <= '9' {
 			taking = true
-			widthFlags = append(widthFlags, string(f))
+			widthFlags += string(f)
 		} else {
 			if taking {
 				break
@@ -44,7 +39,7 @@ func (v verb) maxWidth() (int, bool) {
 		return 0, false
 	}
 
-	width, err := strconv.Atoi(strings.Join(widthFlags, ""))
+	width, err := strconv.Atoi(widthFlags)
 	if err != nil {
 		return 0, false
 	}
