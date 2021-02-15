@@ -235,7 +235,7 @@ func TestScanString(t *testing.T) {
 				&stringVal2,
 			},
 			shouldError:   true,
-			expectedError: fmt.Sprintf(`capturing from 'str' according to 'format': %s: could not find substring '!" said ' in '"What a beautiful hot air balloon?" said Heidi.'`, ErrNoMatch),
+			expectedError: fmt.Sprintf(`capturing from 'str': %s: could not find substring '!" said ' in '"What a beautiful hot air balloon?" said Heidi.'`, ErrNoMatch),
 		},
 		{
 			name:   "returns ErrNoMatch for all substrings found but not in order",
@@ -245,7 +245,7 @@ func TestScanString(t *testing.T) {
 				&stringVal1,
 			},
 			shouldError:   true,
-			expectedError: fmt.Sprintf("capturing from 'str' according to 'format': %s", ErrNoMatch),
+			expectedError: fmt.Sprintf("capturing from 'str': %s", ErrNoMatch),
 		},
 		{
 			name:   "returns ErrNoMatch for all substrings found in order but too few captures",
@@ -257,7 +257,7 @@ func TestScanString(t *testing.T) {
 				&intVal3,
 			},
 			shouldError:   true,
-			expectedError: fmt.Sprintf("capturing from 'str' according to 'format': %s", ErrNoMatch),
+			expectedError: fmt.Sprintf("capturing from 'str': %s", ErrNoMatch),
 		},
 		{
 			name:   "returns ErrMultipleMatches for multiple matches",
@@ -269,7 +269,7 @@ func TestScanString(t *testing.T) {
 				&intVal3,
 			},
 			shouldError:   true,
-			expectedError: fmt.Sprintf("capturing from 'str' according to 'format': %s: found 2; need 1", ErrMultipleMatches),
+			expectedError: fmt.Sprintf("capturing from 'str': %s: found 2; need 1", ErrMultipleMatches),
 		},
 		{
 			name:   "returns error for missing capture at start of string",
@@ -280,7 +280,7 @@ func TestScanString(t *testing.T) {
 				&stringVal2,
 			},
 			shouldError:   true,
-			expectedError: "capturing from 'str' according to 'format': captured empty string: expected capture at start of 'str' for leading verb '%s'",
+			expectedError: "capturing from 'str': captured empty string: expected capture at start of 'str' for leading verb '%s'",
 		},
 		{
 			name:   "returns error for missing capture at end of string",
@@ -290,7 +290,7 @@ func TestScanString(t *testing.T) {
 				&intVal1,
 			},
 			shouldError:   true,
-			expectedError: "capturing from 'str' according to 'format': captured empty string: expected capture at end of 'str' for final verb '%d'",
+			expectedError: "capturing from 'str': captured empty string: expected capture at end of 'str' for final verb '%d'",
 		},
 		{
 			name:   "returns error for wrong target type",
