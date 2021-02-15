@@ -31,8 +31,8 @@ var (
 
 // TODO: Initialize exported pattern type safe for (concurrent) reuse. Must compile equivalent.
 
-// FromString captures values from 'str' according to 'format' and assigns them to 'targetPtrs'.
-func FromString(str, format string, targetPtrs ...interface{}) error {
+// ScanString captures values from 'str' according to 'format' and assigns them to 'targetPtrs'.
+func ScanString(str, format string, targetPtrs ...interface{}) error {
 	if format == "" {
 		return fmt.Errorf("%w: 'format' must not be empty", ErrBadArg)
 	}
@@ -51,12 +51,12 @@ func FromString(str, format string, targetPtrs ...interface{}) error {
 	}
 
 	if len(targetPtrs) != pattern.verbCount() {
-		return fmt.Errorf("found %d verbs for %d 'targetPtrs'; count must match", pattern.verbCount(), len(targetPtrs))
+		return fmt.Errorf("got %d 'targetPtrs' for %d verbs; count must match", len(targetPtrs), pattern.verbCount())
 	}
 
 	err = pattern.capture(str)
 	if err != nil {
-		return fmt.Errorf("capturing from 'str' according to 'format': %w", err)
+		return fmt.Errorf("capturing from 'str': %w", err)
 	}
 
 	err = pattern.assign(targetPtrs)

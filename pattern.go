@@ -68,6 +68,15 @@ func newPattern(format string) (p pattern, err error) {
 	return
 }
 
+func (p *pattern) reset() {
+	for i := range p.segments {
+		p.segments[i].starts = nil
+	}
+
+	p.trueSegmentStarts = nil
+	p.captureGroups = nil
+}
+
 func unescapeFormat(format string) string {
 	return strings.ReplaceAll(format, "%%", "%")
 }

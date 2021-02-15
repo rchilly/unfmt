@@ -15,7 +15,7 @@ var (
 	int64Val1, int64Val2, int64Val3    int64
 )
 
-func TestFromString(t *testing.T) {
+func TestScanString(t *testing.T) {
 	testCases := []struct {
 		name          string
 		format        string
@@ -330,7 +330,7 @@ func TestFromString(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// _, err := fmt.Sscanf(tc.str, tc.format, tc.targetPtrs...)
-			err := FromString(tc.str, tc.format, tc.targetPtrs...)
+			err := ScanString(tc.str, tc.format, tc.targetPtrs...)
 			if tc.shouldError {
 				assert.Error(t, err)
 				assert.EqualError(t, err, tc.expectedError)
@@ -347,14 +347,14 @@ const story = `Once upon a time, there was a cat named Lola.
 She liked to curl up in our yard. 
 Her favorite color is yellow and her favorite number is 3, but that's silly, because she's a cat.`
 
-func BenchmarkFromString(b *testing.B) {
+func BenchmarkScanString(b *testing.B) {
 	var favoriteNumber string
 	var three int
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		err := FromString(story, "and her %s is %d,", &favoriteNumber, &three)
+		err := ScanString(story, "and her %s is %d,", &favoriteNumber, &three)
 		if err != nil {
 			b.Fatal("got unexpected error", err)
 		}
