@@ -46,7 +46,7 @@ func assignString(str string, target interface{}) (int, error) {
 }
 
 func isNonInty(r rune) bool {
-	return !(unicode.IsNumber(r) || r == '-')
+	return !(unicode.IsNumber(r) || r == '-' || r == '+')
 }
 
 func assignInt(str string, target interface{}) (int, error) {
