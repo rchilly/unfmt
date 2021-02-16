@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,7 +15,7 @@ var (
 	int64Val1, int64Val2, int64Val3    int64
 )
 
-func TestGimmef(t *testing.T) {
+func TestScanString(t *testing.T) {
 	testCases := []struct {
 		name          string
 		format        string
@@ -38,9 +39,89 @@ func TestGimmef(t *testing.T) {
 			},
 		},
 		{
+			name:   "handles width and whitespace",
+			format: "%5s",
+			str:    "   abcdefghijk",
+			targetPtrs: []interface{}{
+				&stringVal1,
+			},
+			assertResult: func(t *testing.T) {
+				assert.Equal(t, "abcde", stringVal1)
+			},
+		},
+		{
+			name:   "handles adjacent verbs",
+			format: "%5s%d",
+			str:    "   123456",
+			targetPtrs: []interface{}{
+				&stringVal1,
+				&intVal1,
+			},
+			assertResult: func(t *testing.T) {
+				assert.Equal(t, "12345", stringVal1)
+				assert.Equal(t, 6, intVal1)
+			},
+		},
+		{
+			name:   "navigates non-numeric characters for adjacent verbs",
+			format: "%d%s",
+			str:    "   123456foo",
+			targetPtrs: []interface{}{
+				&intVal1,
+				&stringVal1,
+			},
+			assertResult: func(t *testing.T) {
+				assert.Equal(t, 123456, intVal1)
+				assert.Equal(t, "foo", stringVal1)
+			},
+		},
+		{
+			name:   "handles consecutive instances of same verb with width specified",
+			format: "%3d%4d%d",
+			str:    "100200030000",
+			targetPtrs: []interface{}{
+				&intVal1,
+				&intVal2,
+				&intVal3,
+			},
+			assertResult: func(t *testing.T) {
+				assert.Equal(t, 100, intVal1)
+				assert.Equal(t, 2000, intVal2)
+				assert.Equal(t, 30000, intVal3)
+			},
+		},
+		{
+			name:   "takes less than max width if whitespace encountered",
+			format: "%3d%4d%d",
+			str:    "10 020 0030 000",
+			targetPtrs: []interface{}{
+				&intVal1,
+				&intVal2,
+				&intVal3,
+			},
+			assertResult: func(t *testing.T) {
+				assert.Equal(t, 10, intVal1)
+				assert.Equal(t, 20, intVal2)
+				assert.Equal(t, 30, intVal3)
+			},
+		},
+		{
+			name:   "handles empty string for string verb",
+			format: "%3d%s",
+			str:    " 12  ",
+			targetPtrs: []interface{}{
+				&intVal1,
+				&stringVal1,
+			},
+			assertResult: func(t *testing.T) {
+				assert.Equal(t, 12, intVal1)
+				assert.Equal(t, "", stringVal1)
+			},
+		},
+		{
 			name:   "handles substrings",
 			format: "might contain %s fragment",
-			str:    "I have a sentence that might contain this fragment of text",
+			str:    "I have a sentence that might contain      this fragment of text",
 			targetPtrs: []interface{}{
 				&stringVal1,
 			},
@@ -143,7 +224,7 @@ func TestGimmef(t *testing.T) {
 				&intVal2,
 			},
 			shouldError:   true,
-			expectedError: fmt.Sprintf("parsing 'format': %s: found consecutive instances of verb '%%d' without an intervening substring", ErrBadArg),
+			expectedError: fmt.Sprintf("parsing 'format': %s: found consecutive instances of verb '%%d' without a max width or intervening substring", ErrBadArg),
 		},
 		{
 			name:   "returns ErrNoMatch for not all substrings found",
@@ -154,7 +235,7 @@ func TestGimmef(t *testing.T) {
 				&stringVal2,
 			},
 			shouldError:   true,
-			expectedError: fmt.Sprintf(`applying 'format' to 'str': %s: could not find substring '!" said ' in '"What a beautiful hot air balloon?" said Heidi.'`, ErrNoMatch),
+			expectedError: fmt.Sprintf(`capturing from 'str': %s: could not find substring '!" said ' in '"What a beautiful hot air balloon?" said Heidi.'`, ErrNoMatch),
 		},
 		{
 			name:   "returns ErrNoMatch for all substrings found but not in order",
@@ -164,7 +245,7 @@ func TestGimmef(t *testing.T) {
 				&stringVal1,
 			},
 			shouldError:   true,
-			expectedError: fmt.Sprintf("applying 'format' to 'str': %s", ErrNoMatch),
+			expectedError: fmt.Sprintf("capturing from 'str': %s", ErrNoMatch),
 		},
 		{
 			name:   "returns ErrNoMatch for all substrings found in order but too few captures",
@@ -176,7 +257,7 @@ func TestGimmef(t *testing.T) {
 				&intVal3,
 			},
 			shouldError:   true,
-			expectedError: fmt.Sprintf("applying 'format' to 'str': %s", ErrNoMatch),
+			expectedError: fmt.Sprintf("capturing from 'str': %s", ErrNoMatch),
 		},
 		{
 			name:   "returns ErrMultipleMatches for multiple matches",
@@ -188,7 +269,28 @@ func TestGimmef(t *testing.T) {
 				&intVal3,
 			},
 			shouldError:   true,
-			expectedError: fmt.Sprintf("applying 'format' to 'str': %s: found 2; need 1", ErrMultipleMatches),
+			expectedError: fmt.Sprintf("capturing from 'str': %s", ErrMultipleMatches),
+		},
+		{
+			name:   "returns error for missing capture at start of string",
+			format: "%s is %s to me",
+			str:    " is Greek to me",
+			targetPtrs: []interface{}{
+				&stringVal1,
+				&stringVal2,
+			},
+			shouldError:   true,
+			expectedError: "capturing from 'str': captured empty string: expected capture at start of 'str' for leading verb(s)",
+		},
+		{
+			name:   "returns error for missing capture at end of string",
+			format: "the number is %d",
+			str:    "the number is ",
+			targetPtrs: []interface{}{
+				&intVal1,
+			},
+			shouldError:   true,
+			expectedError: "capturing from 'str': captured empty string: expected capture at end of 'str' for final verb(s)",
 		},
 		{
 			name:   "returns error for wrong target type",
@@ -201,11 +303,34 @@ func TestGimmef(t *testing.T) {
 			shouldError:   true,
 			expectedError: "assigning values to 'targetPtrs': at index 1: expected string pointer as target, got *int",
 		},
+		{
+			name:   "returns error for adjacent verb competition",
+			format: "no width specified for %d%s",
+			str:    "no width specified for 100000",
+			targetPtrs: []interface{}{
+				&intVal1,
+				&stringVal1,
+			},
+			shouldError:   true,
+			expectedError: "assigning values to 'targetPtrs': at index 1: all of substring '100000' consumed by prior adjacent verb(s), none left for next verb '%s'",
+		},
+		{
+			name:   "returns error for empty string for int verb",
+			format: "%5s%d",
+			str:    "  abc   ",
+			targetPtrs: []interface{}{
+				&stringVal1,
+				&intVal1,
+			},
+			shouldError:   true,
+			expectedError: `assigning values to 'targetPtrs': at index 1: error converting '' to integer: strconv.ParseInt: parsing "": invalid syntax`,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := Gimmef(tc.format, tc.str, tc.targetPtrs...)
+			// _, err := fmt.Sscanf(tc.str, tc.format, tc.targetPtrs...)
+			err := ScanString(tc.str, tc.format, tc.targetPtrs...)
 			if tc.shouldError {
 				assert.Error(t, err)
 				assert.EqualError(t, err, tc.expectedError)
@@ -222,21 +347,85 @@ const story = `Once upon a time, there was a cat named Lola.
 She liked to curl up in our yard. 
 Her favorite color is yellow and her favorite number is 3, but that's silly, because she's a cat.`
 
-func BenchmarkGimmef(b *testing.B) {
-	var favoriteNumber string
+func BenchmarkScanString(b *testing.B) {
+	var number string
 	var three int
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		err := Gimmef("and her %s is %d,", story, &favoriteNumber, &three)
+		// err := ScanString(story, "and her %s is %d,", &favoriteNumber, &three)
+		// if err != nil {
+		// 	b.Fatal("got unexpected error", err)
+		// }
+		// _, err := fmt.Sscanf("my favorite number is 3", "my favorite %s is %d", &number, &three)
+		err := ScanString("my favorite number is 3", "my favorite %s is %d", &number, &three) // Go's is faster, fewer allocations. Dig into how.
 		if err != nil {
-			b.Fatal("got unexpected error", err)
+			b.Fatal(err)
 		}
 	}
 
 	b.StopTimer()
 
-	assert.Equal(b, "favorite number", favoriteNumber)
+	assert.Equal(b, "number", number)
 	assert.Equal(b, 3, three)
+}
+
+func TestFormatting(t *testing.T) {
+	t.SkipNow()
+
+	if false {
+		t.FailNow()
+	}
+	fmt.Printf("%0120.2f\n", 10.123)
+}
+
+func TestVerbs(t *testing.T) {
+	t.SkipNow()
+
+	if false {
+		t.FailNow()
+	}
+
+	format := "%5s %9.2d %-8s"
+
+	p, err := newPattern(format)
+	if err != nil {
+		t.Error(err)
+	}
+
+	fmt.Printf("p.segments = %#v\n", p.segments)
+	fmt.Printf("p.verbs = %#v\n", p.verbs)
+}
+
+func TestGoFmtScanf(t *testing.T) {
+	var i int
+	var f float32
+	var s string
+
+	_, err := fmt.Sscanf("12345678", "%1d%3f%4s", &i, &f, &s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, 1, i)
+	assert.Equal(t, float32(234), f)
+	assert.Equal(t, "5678", s)
+
+	_, err = fmt.Sscanf("12345foo", "%d%s", &i, &s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, 12345, i)
+	assert.Equal(t, "foo", s)
+}
+
+func TestIntConvert(t *testing.T) {
+	i, err := strconv.Atoi("-1000000")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, -1000000, i)
 }
