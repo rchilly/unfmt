@@ -6,13 +6,10 @@ import (
 )
 
 const (
-	pct rune = '%'
-	neg rune = '-'
-
-	verbBool   = 't'
-	verbString = 's'
-	verbInt    = 'd'
-	// TODO: Add missing verbs. %f, %t, %b, etc.
+	verbBool   rune = 't'
+	verbInt    rune = 'd'
+	verbString rune = 's'
+	// TODO: Add missing verbs.
 )
 
 var (
@@ -25,14 +22,17 @@ var (
 	// ErrMultipleMatches reports that 'str' matches 'format' more than once.
 	ErrMultipleMatches = errors.New("'str' matches 'format' more than once")
 
+	// ErrEmptyCapture reports a capture of empty string for one of the verbs in 'format'.
+	ErrEmptyCapture = errors.New("captured empty string")
+
 	// ErrBug reports a bug.
 	ErrBug = errors.New("bug")
 )
 
 // TODO: Initialize exported pattern type safe for (concurrent) reuse. Must compile equivalent.
 
-// Gimmef uses 'format' to capture typed values from 'str' and assign them to 'targetPtrs'.
-func Gimmef(format, str string, targetPtrs ...interface{}) error {
+// ScanString captures values from 'str' according to 'format' and assigns them to 'targetPtrs'.
+func ScanString(str, format string, targetPtrs ...interface{}) error {
 	if format == "" {
 		return fmt.Errorf("%w: 'format' must not be empty", ErrBadArg)
 	}
@@ -51,12 +51,12 @@ func Gimmef(format, str string, targetPtrs ...interface{}) error {
 	}
 
 	if len(targetPtrs) != pattern.verbCount() {
-		return fmt.Errorf("found %d verbs for %d 'targetPtrs'; count must match", pattern.verbCount(), len(targetPtrs))
+		return fmt.Errorf("got %d 'targetPtrs' for %d verbs; count must match", len(targetPtrs), pattern.verbCount())
 	}
 
 	err = pattern.capture(str)
 	if err != nil {
-		return fmt.Errorf("applying 'format' to 'str': %w", err)
+		return fmt.Errorf("capturing from 'str': %w", err)
 	}
 
 	err = pattern.assign(targetPtrs)

@@ -3,50 +3,93 @@ package main
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
-type assignFunc func(string, interface{}) error
+type assignFunc func(string, interface{}) (int, error)
 
-var assignFuncs = map[rune]assignFunc{
-	verbBool:   assignBool,
-	verbString: assignString,
-	verbInt:    assignInt,
-}
+var (
+	boolRunes = "01truefalseTRUEFALSE"
+	intRunes  = "+-0123456789"
+
+	assignFuncs = map[rune]assignFunc{
+		verbBool:   assignBool,
+		verbString: assignString,
+		verbInt:    assignInt,
+	}
+)
 
 func isSupportedVerb(r rune) bool {
 	_, ok := assignFuncs[r]
 	return ok
 }
 
-func assignBool(str string, target interface{}) error {
+// TODO: Make this setup generic i.e. DRY.
+func isNonBooly(r rune) bool {
+	for _, br := range boolRunes {
+		if br == r {
+			return false
+		}
+	}
+
+	return true
+}
+
+func assignBool(str string, target interface{}) (int, error) {
 	pBool, ok := target.(*bool)
 	if !ok {
-		return fmt.Errorf("expected bool pointer as target, got %T", target)
+		return 0, fmt.Errorf("expected bool pointer as target, got %T", target)
+	}
+
+	switch nonBoolIndex := strings.IndexFunc(str, isNonBooly); nonBoolIndex {
+	case 0:
+		return 0, fmt.Errorf("expected one or more leading boolean characters, got '%s'", str)
+	case -1:
+	default:
+		str = str[:nonBoolIndex]
 	}
 
 	b, err := strconv.ParseBool(str)
 	if err != nil {
-		return fmt.Errorf("error converting '%s' to bool: %w", str, err)
+		return 0, fmt.Errorf("error converting '%s' to bool: %w", str, err)
 	}
 
 	*pBool = b
-	return nil
+	return len(str), nil
 }
 
-func assignString(str string, target interface{}) error {
+func assignString(str string, target interface{}) (int, error) {
 	pStr, ok := target.(*string)
 	if !ok {
-		return fmt.Errorf("expected string pointer as target, got %T", target)
+		return 0, fmt.Errorf("expected string pointer as target, got %T", target)
 	}
 
 	*pStr = str
-	return nil
+	return len(str), nil
 }
 
-func assignInt(str string, target interface{}) error {
+func isNonInty(r rune) bool {
+	for _, ir := range intRunes {
+		if ir == r {
+			return false
+		}
+	}
+
+	return true
+}
+
+func assignInt(str string, target interface{}) (int, error) {
 	var signed int64
 	var unsigned uint64
 	var err error
+
+	switch nonIntIndex := strings.IndexFunc(str, isNonInty); nonIntIndex {
+	case 0:
+		return 0, fmt.Errorf("expected one or more leading numeric characters, got '%s'", str)
+	case -1:
+	default:
+		str = str[:nonIntIndex]
+	}
 
 	switch v := target.(type) {
 	case *int:
@@ -80,12 +123,12 @@ func assignInt(str string, target interface{}) error {
 		unsigned, err = strconv.ParseUint(str, 10, 64)
 		*v = unsigned
 	default:
-		return fmt.Errorf("expected integer pointer as target, got %T", target)
+		return 0, fmt.Errorf("expected integer pointer as target, got %T", target)
 	}
 
 	if err != nil {
-		return fmt.Errorf("error converting '%s' to integer: %w", str, err)
+		return 0, fmt.Errorf("error converting '%s' to integer: %w", str, err)
 	}
 
-	return nil
+	return len(str), nil
 }
