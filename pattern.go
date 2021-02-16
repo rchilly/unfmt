@@ -2,10 +2,8 @@ package main
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"unicode"
-	"unicode/utf8"
 )
 
 var flags = []rune{
@@ -82,15 +80,10 @@ func unescapeFormat(format string) string {
 }
 
 func (p *pattern) parseVerbs(format string) error {
-	fmtBytes := []byte(format)
-
 	var seekVerb bool
-	var idx int
 	var flags []rune
 
-	for len(fmtBytes) > 0 {
-		nextRune, size := utf8.DecodeRune(fmtBytes)
-
+	for idx, nextRune := range format {
 		if seekVerb {
 			switch {
 			case nextRune == '%':
@@ -117,10 +110,6 @@ func (p *pattern) parseVerbs(format string) error {
 		} else if nextRune == '%' {
 			seekVerb = true
 		}
-
-		idx += size
-
-		fmtBytes = fmtBytes[size:]
 	}
 
 	return nil
@@ -151,14 +140,13 @@ func (p *pattern) parseSegments(unescapedFormat string) error {
 	index := 0
 
 	for i, verb := range p.verbs {
-		halves := strings.SplitN(remainder, verb.String(), 2)
-		if len(halves[0]) > 0 {
+		verbIndex := strings.Index(remainder, verb.String())
+
+		if len(remainder[:verbIndex]) > 0 {
 			p.segments = append(p.segments, segment{
-				value:       halves[0],
+				value:       remainder[:verbIndex],
 				formatStart: index,
 			})
-
-			index += len(halves[0])
 		} else if i > 0 {
 			previousVerb := p.verbs[i-1]
 			if verb.value == previousVerb.value {
@@ -172,9 +160,9 @@ func (p *pattern) parseSegments(unescapedFormat string) error {
 			}
 		}
 
-		remainder = halves[1]
+		index += verbIndex + verb.len()
 
-		index += len(verb.String())
+		remainder = remainder[verbIndex+verb.len():]
 	}
 
 	if len(remainder) > 0 {
@@ -210,7 +198,7 @@ func (p *pattern) capture(str string) error {
 func (p *pattern) findAllSegmentStarts(str string) error {
 	for i := range p.segments {
 		segment := p.segments[i].value
-		var starts []int
+
 		var offset int
 
 		for offset <= len(str) {
@@ -220,16 +208,14 @@ func (p *pattern) findAllSegmentStarts(str string) error {
 			}
 
 			trueStart := offset + relativeStart
-			starts = append(starts, trueStart)
+			p.segments[i].starts = append(p.segments[i].starts, trueStart)
 
 			offset = trueStart + len(segment)
 		}
 
-		if len(starts) == 0 {
+		if len(p.segments[i].starts) == 0 {
 			return fmt.Errorf("%w: could not find substring '%s' in '%s'", ErrNoMatch, segment, str)
 		}
-
-		p.segments[i].starts = starts
 	}
 
 	return nil
@@ -254,8 +240,6 @@ func (p *pattern) getTrueSegmentStarts() error {
 		return nil
 	}
 
-	var startSets [][]int
-
 	lastSegmentStarts := p.segments[len(p.segments)-1].starts
 
 	// Each start index found for the last segment in the pattern begins
@@ -263,41 +247,42 @@ func (p *pattern) getTrueSegmentStarts() error {
 	// of segments separated from each other only by verbs and thus perfectly
 	// enclosing a series of intended captures from the string input.
 	for _, lastSegmentStart := range lastSegmentStarts {
-		set := []int{lastSegmentStart}
+		starts := []int{lastSegmentStart}
 
 		// Work backwards through each of the other segments prior to the last,
 		// and backwards through each of their starts. Take the first start that,
-		// combined with the segment's length, is less than the latest start added
-		// to the set. This marks an instance of the segment immediately preceding
+		// combined with the segment's length, is less than the earliest start
+		// in the set. This marks an instance of the segment immediately preceding
 		// the one in front of it, on the other side of an intended capture.
 		for i := len(p.segments) - 2; i >= 0; i-- {
 			nextSegmentBack := p.segments[i]
 
 			for j := len(nextSegmentBack.starts) - 1; j >= 0; j-- {
-				latestStartInSet := set[len(set)-1]
+				earliestSegmentStart := starts[0]
 
-				if (nextSegmentBack.starts[j] + len(nextSegmentBack.value)) < latestStartInSet {
-					set = append(set, nextSegmentBack.starts[j])
+				if (nextSegmentBack.starts[j] + len(nextSegmentBack.value)) < earliestSegmentStart {
+					// Since we're working backwards from last to first segment,
+					// prepend each next found start to the slice to keep it sorted.
+					starts = append(starts, 0)
+					copy(starts[1:], starts)
+					starts[0] = nextSegmentBack.starts[j]
 					break
 				}
 			}
 		}
 
-		if len(set) == len(p.segments) {
-			startSets = append(startSets, set)
+		if len(starts) == len(p.segments) {
+			if len(p.trueSegmentStarts) > 0 {
+				return ErrMultipleMatches
+			}
+
+			p.trueSegmentStarts = starts
 		}
 	}
 
-	if len(startSets) > 1 {
-		return fmt.Errorf("%w: found %d; need 1", ErrMultipleMatches, len(startSets))
-	}
-
-	if len(startSets) < 1 {
+	if len(p.trueSegmentStarts) < 1 {
 		return ErrNoMatch
 	}
-
-	p.trueSegmentStarts = startSets[0]
-	sort.Ints(p.trueSegmentStarts)
 
 	return nil
 }
@@ -326,25 +311,28 @@ func (p *pattern) getCaptureGroups(str string) error {
 		// that start to the verb(s) before that segment's start
 		// in the format.
 		if i == 0 && p.beginsWithVerb() {
-			var verbs []verb
-			for _, v := range p.verbs {
+			var from, to = -1, len(p.verbs)
+			for i, v := range p.verbs {
 				if v.start < segment.formatStart {
-					verbs = append(verbs, v)
+					if from < 0 {
+						from = i
+					}
+
+					to = i + 1
 				}
 			}
 
 			substr := str[:start]
 			if len(substr) == 0 {
 				return fmt.Errorf(
-					"%w: expected capture at start of 'str' for leading verb '%s'",
+					"%w: expected capture at start of 'str' for leading verb(s)",
 					ErrEmptyCapture,
-					p.verbs[0],
 				)
 			}
 
 			p.captureGroups = append(p.captureGroups, captureGroup{
 				substr: str[:start],
-				verbs:  verbs,
+				verbs:  p.verbs[from:to],
 			})
 		}
 
@@ -354,10 +342,14 @@ func (p *pattern) getCaptureGroups(str string) error {
 		// the loop.
 		if i == startCount-1 {
 			if p.endsWithVerb() {
-				var verbs []verb
-				for _, v := range p.verbs {
+				var from, to = -1, len(p.verbs)
+				for i, v := range p.verbs {
 					if v.start > segment.formatStart {
-						verbs = append(verbs, v)
+						if from < 0 {
+							from = i
+						}
+
+						to = i + 1
 					}
 				}
 
@@ -365,15 +357,14 @@ func (p *pattern) getCaptureGroups(str string) error {
 				substr := str[captureFrom:]
 				if len(substr) == 0 {
 					return fmt.Errorf(
-						"%w: expected capture at end of 'str' for final verb '%s'",
+						"%w: expected capture at end of 'str' for final verb(s)",
 						ErrEmptyCapture,
-						p.verbs[len(p.verbs)-1],
 					)
 				}
 
 				p.captureGroups = append(p.captureGroups, captureGroup{
 					substr: str[captureFrom:],
-					verbs:  verbs,
+					verbs:  p.verbs[from:to],
 				})
 			}
 
@@ -384,10 +375,14 @@ func (p *pattern) getCaptureGroups(str string) error {
 		// segment ends and the next one starts and assign it to a capture group with
 		// any verbs between those two segments in the format.
 		nextSegment := segments[i+1]
-		var verbs []verb
-		for _, v := range p.verbs {
+		var from, to = -1, len(p.verbs)
+		for i, v := range p.verbs {
 			if v.start > segment.formatStart && v.start < nextSegment.formatStart {
-				verbs = append(verbs, v)
+				if from < 0 {
+					from = i
+				}
+
+				to = i + 1
 			}
 		}
 
@@ -405,7 +400,7 @@ func (p *pattern) getCaptureGroups(str string) error {
 
 		p.captureGroups = append(p.captureGroups, captureGroup{
 			substr: str[captureFrom:captureTo],
-			verbs:  verbs,
+			verbs:  p.verbs[from:to],
 		})
 	}
 
@@ -502,7 +497,7 @@ func (p pattern) beginsWithVerb() bool {
 func (p pattern) endsWithVerb() bool {
 	if len(p.verbs) > 0 {
 		lastVerb := p.verbs[len(p.verbs)-1]
-		offset := len(lastVerb.String())
+		offset := lastVerb.len()
 		return lastVerb.start == len(p.format)-offset
 	}
 
@@ -531,7 +526,7 @@ func (p pattern) printVerbs() {
 func (p pattern) printSegments() {
 	fmt.Print("Segments")
 	for i, s := range p.segments {
-		fmt.Printf("\n  %d. %q", i+1, s)
+		fmt.Printf("\n  %d. %q", i+1, s.value)
 		for i, start := range s.starts {
 			if i == 0 {
 				fmt.Print(" [")

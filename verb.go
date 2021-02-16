@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"strconv"
 )
 
@@ -12,11 +11,13 @@ type verb struct {
 }
 
 func (v verb) String() string {
-	var flags string
-	for i := range v.flags {
-		flags += string(v.flags[i])
-	}
-	return fmt.Sprintf("%%%s%c", flags, v.value)
+	return "%" + string(v.flags) + string(v.value)
+}
+
+func (v verb) len() int {
+	// Each supported verb and its accompanying '%' are single-byte UTF-8
+	// code points, hence 2.
+	return 2 + len(v.flags)
 }
 
 func (v verb) maxWidth() (int, bool) {

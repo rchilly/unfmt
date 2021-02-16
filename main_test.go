@@ -269,7 +269,7 @@ func TestScanString(t *testing.T) {
 				&intVal3,
 			},
 			shouldError:   true,
-			expectedError: fmt.Sprintf("capturing from 'str': %s: found 2; need 1", ErrMultipleMatches),
+			expectedError: fmt.Sprintf("capturing from 'str': %s", ErrMultipleMatches),
 		},
 		{
 			name:   "returns error for missing capture at start of string",
@@ -280,7 +280,7 @@ func TestScanString(t *testing.T) {
 				&stringVal2,
 			},
 			shouldError:   true,
-			expectedError: "capturing from 'str': captured empty string: expected capture at start of 'str' for leading verb '%s'",
+			expectedError: "capturing from 'str': captured empty string: expected capture at start of 'str' for leading verb(s)",
 		},
 		{
 			name:   "returns error for missing capture at end of string",
@@ -290,7 +290,7 @@ func TestScanString(t *testing.T) {
 				&intVal1,
 			},
 			shouldError:   true,
-			expectedError: "capturing from 'str': captured empty string: expected capture at end of 'str' for final verb '%d'",
+			expectedError: "capturing from 'str': captured empty string: expected capture at end of 'str' for final verb(s)",
 		},
 		{
 			name:   "returns error for wrong target type",
@@ -348,21 +348,26 @@ She liked to curl up in our yard.
 Her favorite color is yellow and her favorite number is 3, but that's silly, because she's a cat.`
 
 func BenchmarkScanString(b *testing.B) {
-	var favoriteNumber string
+	var number string
 	var three int
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		err := ScanString(story, "and her %s is %d,", &favoriteNumber, &three)
+		// err := ScanString(story, "and her %s is %d,", &favoriteNumber, &three)
+		// if err != nil {
+		// 	b.Fatal("got unexpected error", err)
+		// }
+		// _, err := fmt.Sscanf("my favorite number is 3", "my favorite %s is %d", &number, &three)
+		err := ScanString("my favorite number is 3", "my favorite %s is %d", &number, &three) // Go's is faster, fewer allocations. Dig into how.
 		if err != nil {
-			b.Fatal("got unexpected error", err)
+			b.Fatal(err)
 		}
 	}
 
 	b.StopTimer()
 
-	assert.Equal(b, "favorite number", favoriteNumber)
+	assert.Equal(b, "number", number)
 	assert.Equal(b, 3, three)
 }
 
