@@ -84,31 +84,32 @@ func (p *pattern) parseVerbs(format string) error {
 	var flags []rune
 
 	for idx, nextRune := range format {
-		if seekVerb {
-			switch {
-			case nextRune == '%':
-				seekVerb = false
-			case isFlag(nextRune):
-				flags = append(flags, nextRune)
-			case isSupportedVerb(nextRune):
-				offset := len("%") + len(flags)
-				p.verbs = append(p.verbs, verb{
-					start: idx - offset,
-					value: nextRune,
-					flags: flags,
-				})
+		if !seekVerb {
+			seekVerb = nextRune == '%'
+			continue
+		}
 
-				seekVerb = false
+		switch {
+		case nextRune == '%':
+			seekVerb = false
+		case isFlag(nextRune):
+			flags = append(flags, nextRune)
+		case isSupportedVerb(nextRune):
+			offset := len("%") + len(flags)
+			p.verbs = append(p.verbs, verb{
+				start: idx - offset,
+				value: nextRune,
+				flags: flags,
+			})
 
-				flags = nil
-			default:
-				return fmt.Errorf("%w: unsupported verb '%s'", ErrBadArg, verb{
-					value: nextRune,
-					flags: flags,
-				})
-			}
-		} else if nextRune == '%' {
-			seekVerb = true
+			seekVerb = false
+
+			flags = nil
+		default:
+			return fmt.Errorf("%w: unsupported verb '%s'", ErrBadArg, verb{
+				value: nextRune,
+				flags: flags,
+			})
 		}
 	}
 
