@@ -6,28 +6,29 @@ import (
 	"strings"
 )
 
+type runes string
+
+const (
+	boolRunes runes = "01truefalseTRUEFALSE"
+	intRunes  runes = "+-0123456789"
+)
+
 type assignFunc func(string, interface{}) (int, error)
 
-var (
-	boolRunes = "01truefalseTRUEFALSE"
-	intRunes  = "+-0123456789"
-
-	assignFuncs = map[rune]assignFunc{
-		verbBool:   assignBool,
-		verbString: assignString,
-		verbInt:    assignInt,
-	}
-)
+var assignFuncs = map[rune]assignFunc{
+	verbBool:   assignBool,
+	verbString: assignString,
+	verbInt:    assignInt,
+}
 
 func isSupportedVerb(r rune) bool {
 	_, ok := assignFuncs[r]
 	return ok
 }
 
-// TODO: Make this setup generic i.e. DRY.
-func isNonBooly(r rune) bool {
-	for _, br := range boolRunes {
-		if br == r {
+func (rns runes) excludes(r rune) bool {
+	for _, rn := range rns {
+		if rn == r {
 			return false
 		}
 	}
@@ -41,7 +42,7 @@ func assignBool(str string, target interface{}) (int, error) {
 		return 0, fmt.Errorf("expected bool pointer as target, got %T", target)
 	}
 
-	switch nonBoolIndex := strings.IndexFunc(str, isNonBooly); nonBoolIndex {
+	switch nonBoolIndex := strings.IndexFunc(str, boolRunes.excludes); nonBoolIndex {
 	case 0:
 		return 0, fmt.Errorf("expected one or more leading boolean characters, got '%s'", str)
 	case -1:
@@ -68,22 +69,12 @@ func assignString(str string, target interface{}) (int, error) {
 	return len(str), nil
 }
 
-func isNonInty(r rune) bool {
-	for _, ir := range intRunes {
-		if ir == r {
-			return false
-		}
-	}
-
-	return true
-}
-
 func assignInt(str string, target interface{}) (int, error) {
 	var signed int64
 	var unsigned uint64
 	var err error
 
-	switch nonIntIndex := strings.IndexFunc(str, isNonInty); nonIntIndex {
+	switch nonIntIndex := strings.IndexFunc(str, intRunes.excludes); nonIntIndex {
 	case 0:
 		return 0, fmt.Errorf("expected one or more leading numeric characters, got '%s'", str)
 	case -1:

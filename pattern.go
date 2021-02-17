@@ -6,26 +6,11 @@ import (
 	"unicode"
 )
 
-var flags = []rune{
-	'#',
-	'-',
-	'.',
-	' ',
-	'0',
-	'1',
-	'2',
-	'3',
-	'4',
-	'5',
-	'6',
-	'7',
-	'8',
-	'9',
-}
+const flagRunes runes = "#-. 0123456789"
 
-func isFlag(r rune) bool {
-	for _, f := range flags {
-		if f == r {
+func (rns runes) includes(r rune) bool {
+	for _, rn := range rns {
+		if rn == r {
 			return true
 		}
 	}
@@ -92,7 +77,7 @@ func (p *pattern) parseVerbs(format string) error {
 		switch {
 		case nextRune == '%':
 			seekVerb = false
-		case isFlag(nextRune):
+		case flagRunes.includes(nextRune):
 			flags = append(flags, nextRune)
 		case isSupportedVerb(nextRune):
 			offset := len("%") + len(flags)
