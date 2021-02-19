@@ -1,4 +1,4 @@
-package main
+package unfmt
 
 import (
 	"fmt"
@@ -436,7 +436,9 @@ func (p pattern) assign(targetPtrs []interface{}) error {
 			// specifies a max width less than the length of the remaining substring or less than the
 			// index of the next space character, only take that much of the substring.
 			stopEvaluateIndex := len(substr)
-			if nextSpaceIndex := strings.IndexFunc(substr, unicode.IsSpace); nextSpaceIndex >= 0 {
+
+			nextSpaceIndex := strings.IndexFunc(substr, unicode.IsSpace)
+			if nextSpaceIndex >= 0 && verb.stopAtSpaces() {
 				stopEvaluateIndex = nextSpaceIndex
 			}
 			if maxWidth, ok := verb.maxWidth(); ok && maxWidth < stopEvaluateIndex {

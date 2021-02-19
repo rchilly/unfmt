@@ -1,4 +1,4 @@
-package main
+package unfmt
 
 import (
 	"strconv"
@@ -46,4 +46,18 @@ func (v verb) maxWidth() (int, bool) {
 	}
 
 	return width, true
+}
+
+func (v verb) stopAtSpaces() bool {
+	if v.value == verbString {
+		for _, f := range v.flags {
+			if f != ' ' {
+				continue
+			}
+
+			return false
+		}
+	}
+
+	return true
 }
